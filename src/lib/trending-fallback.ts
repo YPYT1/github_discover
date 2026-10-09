@@ -3,6 +3,7 @@ import { filterVariants, searchQuery, type Filters } from "./filters";
 import { github, normalizeRepository, type GitHubRepository } from "./github";
 import { cacheRepositories } from "./repositories";
 import { hashToken } from "./crypto";
+import { recordCache } from "./observability";
 
 // A disclosed activity/popularity fallback, never a substitute Star delta.
 export async function activePopular(env: CloudflareEnv, f: Filters) {
@@ -12,6 +13,7 @@ export async function activePopular(env: CloudflareEnv, f: Filters) {
   )
     .bind(key, Date.now())
     .first<{ data: string }>();
+  recordCache("trending", Boolean(stored));
   if (stored) return JSON.parse(stored.data) as Repository[];
   const days = f.period === "day" ? 1 : f.period === "month" ? 30 : 7;
   const since = new Date(Date.now() - days * 86400000)

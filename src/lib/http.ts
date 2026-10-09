@@ -1,19 +1,21 @@
-export class AppError extends Error {
-  constructor(
-    public code: string,
-    public status = 400,
-  ) {
-    super(code);
-  }
-}
+import { errorCategory, logEvent, requestId } from "./observability";
+import { AppError } from "./app-error";
+export { AppError } from "./app-error";
 export function errorResponse(error: unknown) {
+  logEvent(
+    "application.error",
+    {
+      errorCode: errorCategory(error),
+      status: error instanceof AppError ? error.status : 500,
+    },
+    error instanceof AppError && error.status < 500 ? "warn" : "error",
+  );
   if (error instanceof AppError)
     return Response.json({ error: error.code }, { status: error.status });
-  console.error(
-    "Request failed",
-    error instanceof Error ? error.message : "unknown",
+  return Response.json(
+    { error: "serverError", requestId: requestId() },
+    { status: 500 },
   );
-  return Response.json({ error: "serverError" }, { status: 500 });
 }
 export function checkOrigin(request: Request, appUrl: string) {
   const origin = request.headers.get("origin");

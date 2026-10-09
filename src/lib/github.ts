@@ -1,5 +1,6 @@
 import { AppError } from "./http";
 import type { Repository } from "@/types";
+import { errorCategory, recordGitHub } from "./observability";
 export interface GitHubRepository {
   private?: boolean;
   id: number;
@@ -42,6 +43,23 @@ export async function githubResponse(
   token?: string,
   init?: RequestInit,
 ) {
+  const start = performance.now();
+  const pathname = path.split("?")[0];
+  const endpoint =
+    pathname === "/search/repositories"
+      ? "search"
+      : pathname === "/user"
+        ? "identity"
+        : pathname.startsWith("/user/starred/")
+          ? "star"
+          : pathname === "/user/starred"
+            ? "stars"
+            : pathname === "/user/following"
+              ? "following"
+              : pathname.startsWith("/repos/") ||
+                  /^\/users\/[^/]+\/repos$/.test(pathname)
+                ? "repositories"
+                : "other";
   let response: Response;
   try {
     response = await fetch(`https://api.github.com${path}`, {
@@ -56,9 +74,37 @@ export async function githubResponse(
         ...init?.headers,
       },
     });
-  } catch {
+  } catch (error) {
+    recordGitHub(
+      {
+        endpoint,
+        durationMs: performance.now() - start,
+        errorCode:
+          errorCategory(error) === "timeout" ? "timeout" : "networkError",
+        outcome: "error",
+      },
+      true,
+    );
     throw new AppError("networkError", 502);
   }
+  recordGitHub(
+    {
+      endpoint,
+      status: response.status,
+      durationMs: performance.now() - start,
+      remaining: Number(response.headers.get("x-ratelimit-remaining") ?? NaN),
+      resetAt: Number(response.headers.get("x-ratelimit-reset") ?? NaN),
+      retryAfter: Number(response.headers.get("retry-after") ?? NaN),
+      outcome: response.ok ? "ok" : "error",
+      ...(response.status === 429 ||
+      (response.status === 403 &&
+        (response.headers.get("x-ratelimit-remaining") === "0" ||
+          response.headers.has("retry-after")))
+        ? { errorCode: "rateLimited" }
+        : {}),
+    },
+    !response.ok,
+  );
   if (
     response.status === 429 ||
     (response.status === 403 &&

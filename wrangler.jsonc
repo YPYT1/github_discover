@@ -20,7 +20,10 @@
       "migrations_dir": "migrations",
     },
   ],
-  "vars": { "APP_URL": "https://github-discover.ypyt147.workers.dev" },
+  "vars": {
+    "APP_URL": "https://github-discover.ypyt147.workers.dev",
+    "LOG_SAMPLE_RATE": "0.05",
+  },
   "triggers": { "crons": ["17 */6 * * *"] },
   "observability": { "enabled": true },
 }

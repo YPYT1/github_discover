@@ -11,6 +11,11 @@ assert.equal(
 const identity = await account.json();
 assert.equal(identity.user, null);
 assert.equal(typeof identity.authConfigured, "boolean");
+assert.match(
+  account.headers.get("x-request-id") ?? "",
+  /^[a-f0-9-]{36}$/,
+  "Worker response must expose a server-generated diagnostic ID",
+);
 const home = await fetch(baseURL, { headers: { "accept-language": "en" } });
 assert.equal(home.status, 200, "Cloudflare must serve the static homepage");
 assert.match(await home.text(), /Discover repositories/);

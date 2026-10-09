@@ -8,4 +8,5 @@ interface CloudflareEnv {
   GITHUB_TOKEN?: string;
   TOKEN_ENCRYPTION_KEY?: string;
   CRON_SECRET?: string;
+  LOG_SAMPLE_RATE?: string;
 }

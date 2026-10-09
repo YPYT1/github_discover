@@ -5,6 +5,7 @@ import { cookieOptions } from "@/lib/auth";
 import { encryptToken, randomToken, hashToken } from "@/lib/crypto";
 import { github } from "@/lib/github";
 import { AppError } from "@/lib/http";
+import { errorCategory, logEvent } from "@/lib/observability";
 export async function GET(request: Request) {
   const env = await getEnv();
   const jar = await cookies();
@@ -75,6 +76,11 @@ export async function GET(request: Request) {
     });
     return NextResponse.redirect(new URL("/", env.APP_URL));
   } catch (error) {
+    logEvent(
+      "application.error",
+      { stage: "oauth", errorCode: errorCategory(error) },
+      "error",
+    );
     const code = error instanceof AppError ? error.code : "authFailed";
     return NextResponse.redirect(new URL(`/?authError=${code}`, env.APP_URL));
   }

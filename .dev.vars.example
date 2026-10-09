@@ -1,5 +1,7 @@
 NEXTJS_ENV=development
 APP_URL=http://localhost:3000
+# Successful application-log sampling rate, 0..1; errors/slow requests are retained.
+LOG_SAMPLE_RATE=0.05
 # Create a GitHub OAuth App. Callback: http://localhost:3000/api/auth/callback
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=

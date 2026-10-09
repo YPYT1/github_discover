@@ -1,5 +1,5 @@
 import type { FeedTab } from "@/types";
-import { AppError } from "./http";
+import { AppError } from "./app-error";
 export const categoryTopics: Record<string, string> = {
   ai: "machine-learning",
   tools: "developer-tools",

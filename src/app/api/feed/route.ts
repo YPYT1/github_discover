@@ -4,16 +4,19 @@ import { parseFilters } from "@/lib/filters";
 import { feed } from "@/lib/feed";
 import { AppError, checkOrigin, errorResponse, readBody } from "@/lib/http";
 import { isRecommendation } from "@/lib/recommendations";
+import { observeOperation } from "@/lib/observability";
 export async function GET(request: Request) {
   try {
     const env = await getEnv();
     const params = new URL(request.url).searchParams;
     return Response.json(
-      await feed(
-        env,
-        parseFilters(params),
-        params.get("cursor"),
-        await currentUser(env),
+      await observeOperation("feed", async () =>
+        feed(
+          env,
+          parseFilters(params),
+          params.get("cursor"),
+          await currentUser(env),
+        ),
       ),
       { headers: { "Cache-Control": "private, no-store" } },
     );
@@ -36,11 +39,15 @@ export async function POST(request: Request) {
     )
       throw new AppError("invalidRequest");
     const f = parseFilters(new URLSearchParams(body.query));
+    const cursor = body.cursor;
+    const seen = body.seen;
     if (!isRecommendation(f)) throw new AppError("invalidRequest");
     return Response.json(
-      await feed(env, f, body.cursor, await currentUser(env), {
-        seen: body.seen,
-      }),
+      await observeOperation("feed", async () =>
+        feed(env, f, cursor, await currentUser(env), {
+          seen,
+        }),
+      ),
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

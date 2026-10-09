@@ -5,6 +5,7 @@ import { github, normalizeRepository, type GitHubRepository } from "./github";
 import { cacheRepositories } from "./repositories";
 import { hashToken } from "./crypto";
 import { AppError } from "./http";
+import { observeOperation, recordCache } from "./observability";
 import {
   addTaste,
   emptyTaste,
@@ -69,6 +70,7 @@ async function tasteFor(
     .bind(key, Date.now())
     .first<{ data: string }>();
   let sources: { stars: Repository[]; owned: Repository[] };
+  recordCache("taste", Boolean(stored));
   if (stored) sources = JSON.parse(stored.data);
   else {
     // PAT stays request-local. Missing/revoked authorization does not block public discovery.
@@ -155,10 +157,12 @@ async function candidates(
       .bind(key, Date.now())
       .first<{ data: string }>();
     if (stored) {
+      recordCache("candidates", true);
       repos.push(...JSON.parse(stored.data));
       successful = true;
       continue;
     }
+    recordCache("candidates", false);
     try {
       let data = await github<{ items: GitHubRepository[] }>(
         `/search/repositories?${new URLSearchParams({ q: query, sort: i === 1 ? "stars" : "updated", order: "desc", per_page: "100", page: String(page) })}`,
@@ -225,22 +229,24 @@ export async function recommendationFeed(
         )
         .first<{ data: string }>();
       if (!stored) throw new Error();
+      recordCache("recommendation", true);
       ordered = JSON.parse(stored.data);
       if (offset > ordered.length) throw new Error();
     } catch {
       throw new AppError("invalidCursor");
     }
   } else {
+    recordCache("recommendation", false);
     id = crypto.randomUUID();
     const taste = await tasteFor(env, user, excluded);
-    ordered = rankRecommendations(
-      (await candidates(env, f, taste, id.replaceAll("-", ""))).filter((r) =>
-        matches(r, f),
-      ),
-      taste,
-      excluded,
-      id,
-    ).slice(0, 600);
+    const pool = (
+      await candidates(env, f, taste, id.replaceAll("-", ""))
+    ).filter((r) => matches(r, f));
+    ordered = await observeOperation(
+      "ranking",
+      () => rankRecommendations(pool, taste, excluded, id).slice(0, 600),
+      pool.length,
+    );
     await env.DB.prepare(
       "INSERT OR REPLACE INTO feed_cache(key,data,expires_at) VALUES(?,?,?)",
     )

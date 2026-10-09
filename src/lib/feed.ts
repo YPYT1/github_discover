@@ -7,6 +7,7 @@ import { cacheRepositories } from "./repositories";
 import { userToken, type UserRow } from "./auth";
 import { hashToken } from "./crypto";
 import { activePopular } from "./trending-fallback";
+import { recordCache } from "./observability";
 import {
   isRecommendation,
   recommendationFeed,
@@ -139,8 +140,11 @@ export async function feed(
   )
     .bind(cacheKey, Date.now())
     .first<{ data: string }>();
-  if (cached && !["saved", "history"].includes(f.tab))
+  if (cached && !["saved", "history"].includes(f.tab)) {
+    recordCache("feed", true);
     return JSON.parse(cached.data);
+  }
+  if (!["saved", "history"].includes(f.tab)) recordCache("feed", false);
   let result: FeedResponse;
   if (["saved", "history"].includes(f.tab)) {
     const table = f.tab === "saved" ? "saved_repositories" : "browsing_history";

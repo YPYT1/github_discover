@@ -57,6 +57,8 @@ pnpm demo:build     # 静态产物 demo/dist
 
 正式站已部署 Workers + D1，可浏览真实 GitHub 数据、使用 GitHub OAuth 或 PAT 登录。首页静态提供，账号和推荐在浏览器加载；动态 API 仍受免费 Worker 资源额度限制。未配置服务端采集令牌时，公开请求受较严格的 GitHub API 限额限制。趋势历史不足时，明确标注并展示近期活跃热门项目，不伪造 Star 增长。
 
+运维日志：运行 `pnpm logs`，或查看 Cloudflare → Workers & Pages → github-discover → Observability。详见[日志与故障排查](doc/日志与故障排查.md)。
+
 - [演示部署](demo/README.md)：独立静态 Worker / Pages，无需数据库。
 - [正式应用部署](doc/Cloudflare部署.md)：Workers + D1 + GitHub OAuth。
 - [技术与数据说明](doc/技术说明.md)：推荐、隐私、数据范围与验证。

@@ -1,12 +1,16 @@
 import handler from "./.open-next/worker.js";
+import { observeRequest, observeScheduled } from "./src/lib/observability.ts";
 
 const worker = {
-  fetch: handler.fetch,
+  fetch(request, env, ctx) {
+    return observeRequest(request, env, () => handler.fetch(request, env, ctx));
+  },
   scheduled(_event, env, ctx) {
     // Service binding avoids exposing an admin endpoint without authentication.
     ctx.waitUntil(
-      (async () => {
-        if (!env.CRON_SECRET) throw new Error("CRON_SECRET is not configured");
+      observeScheduled(env, async () => {
+        if (!env.CRON_SECRET)
+          throw Object.assign(new Error(), { code: "configMissing" });
         const response = await env.WORKER_SELF_REFERENCE.fetch(
           new Request(`${env.APP_URL}/api/internal/sync`, {
             method: "POST",
@@ -14,8 +18,13 @@ const worker = {
           }),
         );
         if (!response.ok)
-          throw new Error(`Repository sync failed: ${response.status}`);
-      })(),
+          throw Object.assign(new Error(), {
+            code: "scheduledFailed",
+            status: response.status,
+            relatedRequestId: response.headers.get("x-request-id"),
+          });
+        return response.headers.get("x-request-id");
+      }),
     );
   },
 };
