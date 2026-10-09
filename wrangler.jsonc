@@ -12,11 +12,11 @@
     {
       "binding": "DB",
       "database_name": "github-discover",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "4ba2a3ba-bdcb-44ef-8433-2f609506f3ad",
       "migrations_dir": "migrations",
     },
   ],
-  "vars": { "APP_URL": "http://localhost:3000" },
+  "vars": { "APP_URL": "https://github-discover.ypyt147.workers.dev" },
   "triggers": { "crons": ["17 */6 * * *"] },
   "observability": { "enabled": true },
 }

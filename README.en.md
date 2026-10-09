@@ -46,7 +46,12 @@ pnpm demo:dev       # interactive demo on port 4173
 pnpm demo:build     # standalone static output: demo/dist
 ```
 
-The demo shares production UI, uses labeled sample data, and performs no real authentication or writes. Both editions can be deployed separately on Cloudflare. No public deployment URL is provided yet.
+The demo shares production UI, uses labeled sample data, and performs no real authentication or writes.
+
+- **Live application**: https://github-discover.ypyt147.workers.dev
+- **Interactive demo**: https://github-discover-demo.ypyt147.workers.dev
+
+The live application uses Workers + D1 and real GitHub data; PAT sign-in is available. OAuth account sign-in still requires OAuth App configuration. Public API quotas apply without a server-side GitHub token.
 
 [Demo deployment](demo/README.md) · [Production Workers + D1 guide](doc/Cloudflare部署.md) · [Technical notes](doc/技术说明.md) (Chinese)
 

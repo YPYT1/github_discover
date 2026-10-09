@@ -50,7 +50,12 @@ pnpm demo:dev       # 独立交互演示，端口 4173
 pnpm demo:build     # 静态产物 demo/dist
 ```
 
-演示复用正式 UI，使用明确标注的样本数据，不执行真实登录或写入。演示和正式应用可分别部署到 Cloudflare，当前仓库未发布线上地址。
+演示复用正式 UI，使用明确标注的样本数据，不执行真实登录或写入。
+
+- **正式体验**：https://github-discover.ypyt147.workers.dev
+- **交互演示**：https://github-discover-demo.ypyt147.workers.dev
+
+正式站已部署 Workers + D1，可浏览真实 GitHub 数据、使用 PAT 登录。GitHub OAuth 账号登录仍待配置 OAuth App；未配置服务端采集令牌时，公开请求受较严格的 GitHub API 限额限制。
 
 - [演示部署](demo/README.md)：独立静态 Worker / Pages，无需数据库。
 - [正式应用部署](doc/Cloudflare部署.md)：Workers + D1 + GitHub OAuth。

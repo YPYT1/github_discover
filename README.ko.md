@@ -40,7 +40,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ## 데모와 배포
 
-`pnpm demo:dev`（4173）로 체험하고 `pnpm demo:build`로 `demo/dist`를 생성합니다. 데모는 동일 UI와 표시된 샘플 데이터를 사용하며 실제 인증/쓰기는 하지 않습니다. 데모/정식 앱을 Cloudflare에 독립 배포할 수 있습니다. 공개 URL은 아직 없습니다.
+`pnpm demo:dev`（4173）로 체험하고 `pnpm demo:build`로 `demo/dist`를 생성합니다. 데모는 동일 UI와 표시된 샘플 데이터를 사용하며 실제 인증/쓰기는 하지 않습니다.
+
+- **정식 앱**: https://github-discover.ypyt147.workers.dev
+- **데모**: https://github-discover-demo.ypyt147.workers.dev
+
+정식 앱은 Workers + D1 및 실제 GitHub 데이터를 사용합니다. PAT 로그인은 가능하며 OAuth App 설정은 아직 필요합니다. 서버 토큰 미설정 시 API 제한이 적용됩니다.
 
 [데모](demo/README.md) · [정식 배포](doc/Cloudflare部署.md) · [기술 설명](doc/技术说明.md)（중국어）
 

@@ -40,7 +40,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ## Демо и публикация
 
-`pnpm demo:dev` запускает демо на 4173; `pnpm demo:build` создаёт `demo/dist`. Демо использует тот же интерфейс и помеченные примеры, без настоящей авторизации или записи. Оба приложения публикуются отдельно на Cloudflare. Публичный URL пока не настроен.
+`pnpm demo:dev` запускает демо на 4173; `pnpm demo:build` создаёт `demo/dist`. Демо использует тот же интерфейс и помеченные примеры, без настоящей авторизации или записи.
+
+- **Приложение**: https://github-discover.ypyt147.workers.dev
+- **Демо**: https://github-discover-demo.ypyt147.workers.dev
+
+Приложение использует Workers + D1 и реальные данные GitHub. Доступен вход по PAT; OAuth App ещё не настроено. Без серверного токена действуют строгие лимиты API.
 
 [Демо](demo/README.md) · [Основное приложение](doc/Cloudflare部署.md) · [Технические заметки](doc/技术说明.md) (китайский)
 

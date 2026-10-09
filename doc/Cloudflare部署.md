@@ -4,7 +4,9 @@
 
 `pnpm demo:build` 生成 `demo/dist`。使用 `pnpm demo:deploy` 发布到独立 Worker `github-discover-demo`；配置为 `demo/wrangler.jsonc`，无 D1、OAuth、密钥依赖。也可将 `demo/dist` 交给 Cloudflare Pages。演示使用本地样本、不执行真实登录和写操作。以下步骤适用于正式应用。
 
-网站部署到 **Workers**，数据库使用 **D1 / SQLite**。这是用户确认后替代原设计文档 PostgreSQL 的方案，不使用 Pages 静态导出。本阶段只提供配置，不操作远程资源。
+网站部署到 **Workers**，数据库使用 **D1 / SQLite**。正式站已发布到 https://github-discover.ypyt147.workers.dev，演示站为 https://github-discover-demo.ypyt147.workers.dev。
+
+远程迁移已应用，`TOKEN_ENCRYPTION_KEY` 与 `CRON_SECRET` 已通过 Worker Secrets 配置；OAuth App 和服务端 `GITHUB_TOKEN` 尚未配置。不要将本机部署令牌或 GitHub CLI 登录令牌当作应用采集令牌使用。
 
 ## 1. 创建数据库
 
@@ -95,7 +97,7 @@ Cron 配置为 UTC 每 6 小时的第 17 分钟。定时入口使用服务绑定
 
 ## 7. 发布后的人工验收
 
-- 五种语言与三种主题，手机/平板/桌面没有横向溢出。
+- 五种语言与一键浅色/深色主题，手机/平板/桌面没有横向溢出。
 - OAuth 登录的回调、State 校验、拒绝授权场景、退出登录。
 - PAT 登录：D1 的用户 `token_encrypted` 对 PAT-only 新用户为 NULL，数据库中不含 PAT；浏览器退出后 PAT 清除。此前通过 OAuth 登录过的同一用户可能保留其 OAuth 密文，但 PAT 从不写入该列。
 - 收藏、历史、偏好刷新后存在，不同用户互不可见。
