@@ -71,7 +71,7 @@
   "retry": "Try again",
   "errorTitle": "Couldn’t load repositories",
   "trendPending": "Star growth needs historical snapshots. This feed will be available after the selected period has been sampled.",
-  "trendFallback": "Star-growth history is not ready. Showing up to 100 recently active popular projects per filter combination, ranked by total Stars—not Star growth. The selected period controls recent activity.",
+  "trendFallback": "No matching Star-growth history is available. Showing recently active popular projects, selected by total Stars—not a Star-growth ranking. The period controls recent activity; up to 100 candidates per filter combination.",
   "searchLimit": "GitHub search exposes at most 1,000 results and may return partial results. Narrow your filters to explore further.",
   "followingLimit": "This collection is bounded: up to 500 starred repositories, or the 20 most recently followed developers’ 10 recently updated public repositories each.",
   "collectionHint": "Collection search matches text; GitHub query syntax applies to Explore only.",

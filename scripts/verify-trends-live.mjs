@@ -2,16 +2,27 @@ import assert from "node:assert/strict";
 
 const base =
   process.env.HOME_TEST_URL ?? "https://github-discover.ypyt147.workers.dev";
+async function broadTrend(period) {
+  let data;
+  // Deployment propagation can briefly serve the previous Worker/cache version.
+  // Only retry broad availability checks; never weaken assertions on growth/filter correctness.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const response = await fetch(
+      `${base}/api/feed?tab=trending&period=${period}`,
+      { signal: AbortSignal.timeout(30000) },
+    );
+    if (response.ok) {
+      data = await response.json();
+      if (data.repositories?.length > 0) return data;
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  assert.fail(
+    `Trending ${period} has no broad results after bounded deployment retries`,
+  );
+}
 for (const period of ["day", "week", "month"]) {
-  const response = await fetch(
-    `${base}/api/feed?tab=trending&period=${period}`,
-  );
-  assert.equal(
-    response.status,
-    200,
-    `Trending ${period} must respond successfully`,
-  );
-  const data = await response.json();
+  const data = await broadTrend(period);
   assert.ok(
     data.repositories.length > 0,
     `Trending ${period} should have broad unfiltered results`,
