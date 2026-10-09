@@ -127,12 +127,12 @@
   "footer": "Built for the open-source curious.",
   "footerNote": "An independent project. Not affiliated with GitHub.",
   "errors": {
+    "filterLimit": "Select no more than 16 language/category combinations, or use All languages / All categories.",
     "resourceLimited": "The server reached its compute limit. Please try again later.",
     "demoOnly": "This is a demo. Open the full application to sign in.",
     "serverError": "The server could not process this request. Please try again later.",
     "networkError": "Couldn’t reach GitHub. Check your connection and try again.",
     "rateLimited": "Requests are temporarily limited by this service or GitHub. Please wait before trying again.",
-    "filterLimit": "Select no more than 16 language/category combinations, or use All languages / All categories.",
     "githubError": "GitHub could not complete the request. Your token may need additional permissions.",
     "invalidSearch": "GitHub could not understand this search. Check your query syntax.",
     "invalidRequest": "The request is invalid. Please check your input.",
