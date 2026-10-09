@@ -19,9 +19,11 @@
     "test:worker": "node scripts/verify-worker.mjs",
     "test:static": "node scripts/verify-static-home.mjs",
     "test:home-live": "node --use-env-proxy scripts/verify-home-live.mjs",
+    "test:trends-live": "node --use-env-proxy scripts/verify-trends-live.mjs",
     "cf:build": "opennextjs-cloudflare build && node scripts/package-static-home.mjs && pnpm test:static",
     "preview": "pnpm cf:build && opennextjs-cloudflare preview",
     "deploy": "pnpm cf:build && opennextjs-cloudflare deploy",
+    "release": "node --env-file-if-exists=.env scripts/release.mjs",
     "db:migrate:local": "wrangler d1 migrations apply github-discover --local",
     "db:migrate:remote": "wrangler d1 migrations apply github-discover --remote",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"

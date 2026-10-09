@@ -6,6 +6,7 @@ import { github, normalizeRepository, type GitHubRepository } from "./github";
 import { cacheRepositories } from "./repositories";
 import { userToken, type UserRow } from "./auth";
 import { hashToken } from "./crypto";
+import { activePopular } from "./trending-fallback";
 import {
   isRecommendation,
   recommendationFeed,
@@ -132,7 +133,7 @@ export async function feed(
   }
   const next = (more: boolean) =>
     more ? btoa(JSON.stringify({ key, page: page + 1 })) : null;
-  const cacheKey = `feed:${user?.id ?? "public"}:${key}:${page}`;
+  const cacheKey = `feed:v2:${user?.id ?? "public"}:${key}:${page}`;
   const cached = await env.DB.prepare(
     "SELECT data FROM feed_cache WHERE key=? AND expires_at>?",
   )
@@ -246,11 +247,12 @@ export async function feed(
       `SELECT r.data,
       (SELECT stars FROM star_snapshots WHERE repo_id=r.id ORDER BY day DESC LIMIT 1) -
       (SELECT stars FROM star_snapshots WHERE repo_id=r.id AND day<=? ORDER BY day DESC LIMIT 1) AS growth
-      FROM repositories r WHERE EXISTS(SELECT 1 FROM star_snapshots WHERE repo_id=r.id AND day<=?)`,
+      FROM repositories r WHERE EXISTS(SELECT 1 FROM star_snapshots WHERE repo_id=r.id AND day<=?)
+      AND EXISTS(SELECT 1 FROM star_snapshots WHERE repo_id=r.id AND day>?)`,
     )
-      .bind(baseline, baseline)
+      .bind(baseline, baseline, baseline)
       .all<{ data: string; growth: number }>();
-    const repos = sortRepos(
+    let repos = sortRepos(
       rows.results
         .map((row) => ({
           ...(JSON.parse(row.data) as Repository),
@@ -259,12 +261,27 @@ export async function feed(
         .filter((repo) => matches(repo, f)),
       { ...f, sort: "growth" },
     );
+    const fallback = repos.length === 0 && f.tab === "trending";
+    if (fallback)
+      repos = sortRepos(
+        (await activePopular(env, f)).filter((repo) => matches(repo, f)),
+        {
+          ...f,
+          tab: "for-you",
+          sort:
+            f.sort === "recommended" || f.sort === "growth" ? "stars" : f.sort,
+        },
+      );
     const start = (page - 1) * PAGE_SIZE;
     result = {
       repositories: repos.slice(start, start + PAGE_SIZE),
       total: repos.length,
       nextCursor: next(start + PAGE_SIZE < repos.length),
-      ...(rows.results.length === 0 ? { notice: "trendPending" as const } : {}),
+      ...(fallback
+        ? { notice: "trendFallback" as const }
+        : rows.results.length === 0
+          ? { notice: "trendPending" as const }
+          : {}),
     };
   } else if (f.tab === "latest" || f.sort === "created") {
     // GitHub repository search has no created-at sort. Build a bounded candidate

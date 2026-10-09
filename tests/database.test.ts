@@ -401,7 +401,32 @@ it("logout revokes the hashed database session", async () => {
     (await db.prepare("SELECT * FROM sessions").all()).results,
   ).toHaveLength(0);
 });
-it("computes real growth from historical snapshots and waits for missing baselines", async () => {
+it("computes real growth and uses disclosed active popularity only without baselines", async () => {
+  const network = vi.fn(
+    async (_url: string) => (
+      void _url,
+      Response.json({
+        items: [
+          {
+            id: 43,
+            name: "active",
+            full_name: "test/active",
+            owner: { login: "test", avatar_url: repo.avatar },
+            private: false,
+            stargazers_count: 200,
+            forks_count: 1,
+            language: "TypeScript",
+            topics: ["developer-tools"],
+            created_at: repo.createdAt,
+            updated_at: repo.updatedAt,
+            html_url: repo.url,
+            license: { spdx_id: "MIT" },
+          },
+        ],
+      })
+    ),
+  );
+  vi.stubGlobal("fetch", network);
   await cacheRepositories(db, [repo], true);
   let result = await feed(
     context.env!,
@@ -409,8 +434,12 @@ it("computes real growth from historical snapshots and waits for missing baselin
     null,
     null,
   );
-  expect(result.notice).toBe("trendPending");
-  expect(result.repositories).toHaveLength(0);
+  expect(result.notice).toBe("trendFallback");
+  expect(result.repositories).toHaveLength(1);
+  expect(result.repositories[0].growth).toBeUndefined();
+  expect(
+    new URL(network.mock.calls[0][0] as string).searchParams.get("q"),
+  ).toContain("pushed:>=");
   await db
     .prepare("INSERT INTO star_snapshots(repo_id,day,stars) VALUES(?,?,?)")
     .bind(
@@ -427,4 +456,77 @@ it("computes real growth from historical snapshots and waits for missing baselin
     null,
   );
   expect(result.repositories[0].growth).toBe(20);
+  expect(result.notice).toBeUndefined();
+});
+it.each(["day", "week", "month"])(
+  "fallback honors %s window, OR filters and stable pagination without inventing growth",
+  async (period) => {
+    const network = vi.fn(async (url: string) => {
+      const query = new URL(url).searchParams.get("q")!;
+      const language = query.includes('language:"Rust"')
+        ? "Rust"
+        : "TypeScript";
+      return Response.json({
+        items: Array.from({ length: 30 }, (_, i) => ({
+          id: i + (language === "Rust" ? 100 : 200),
+          name: `repo-${i}`,
+          full_name: `test/${language}-repo-${i}`,
+          owner: { login: "test", avatar_url: repo.avatar },
+          private: false,
+          stargazers_count: 200 - i,
+          forks_count: 1,
+          language,
+          topics: ["developer-tools"],
+          created_at: repo.createdAt,
+          updated_at: repo.updatedAt,
+          html_url: repo.url,
+          license: { spdx_id: "MIT" },
+        })),
+      });
+    });
+    vi.stubGlobal("fetch", network);
+    const f = parseFilters(
+      new URLSearchParams({
+        tab: "trending",
+        period,
+        language: "Rust,TypeScript",
+        category: "tools",
+        minStars: "175",
+        license: "mit",
+      }),
+    );
+    const first = await feed(context.env!, f, null, null);
+    expect(first.notice).toBe("trendFallback");
+    expect(first.total).toBe(52);
+    expect(first.repositories).toHaveLength(25);
+    expect(
+      first.repositories.every((r) => r.stars >= 175 && r.growth === undefined),
+    ).toBe(true);
+    const days = period === "day" ? 1 : period === "month" ? 30 : 7;
+    const date = new Date(Date.now() - days * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    expect(network).toHaveBeenCalledTimes(2);
+    for (const [url] of network.mock.calls)
+      expect(new URL(url).searchParams.get("q")).toContain(`pushed:>=${date}`);
+    const second = await feed(context.env!, f, first.nextCursor, null);
+    expect(second.repositories).toHaveLength(25);
+    expect(
+      second.repositories.some((r) =>
+        first.repositories.some((a) => a.id === r.id),
+      ),
+    ).toBe(false);
+    expect(network).toHaveBeenCalledTimes(2);
+  },
+  30000,
+);
+it("does not substitute popularity for explicit growth sorting outside trending", async () => {
+  const result = await feed(
+    context.env!,
+    parseFilters(new URLSearchParams({ sort: "growth" })),
+    null,
+    null,
+  );
+  expect(result.notice).toBe("trendPending");
+  expect(result.repositories).toEqual([]);
 });

@@ -44,6 +44,7 @@ export interface FeedResponse {
   total: number;
   notice?:
     | "trendPending"
+    | "trendFallback"
     | "searchLimit"
     | "followingLimit"
     | "latestScope"

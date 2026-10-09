@@ -53,6 +53,7 @@ await page.route("**/api/feed?**", (route) => {
         .filter((repo) => !body?.seen.includes(repo.id)),
       total: 12,
       nextCursor: offset ? null : "test-cursor",
+      ...(params.get("tab") === "trending" ? { notice: "trendFallback" } : {}),
     },
   });
 });
@@ -306,6 +307,19 @@ try {
   console.log(
     "PASS: timed exposure persists without removing cards; refresh excludes seen, explicit search does not",
   );
+  await page.goto(`${baseURL}/?tab=trending&period=week`);
+  await page.locator("article").first().waitFor();
+  await page.getByText("Star 增长历史尚不足", { exact: false }).waitFor();
+  assert.equal(
+    await page
+      .getByRole("heading", { name: "没有找到仓库", exact: true })
+      .count(),
+    0,
+  );
+  console.log(
+    "PASS: trending fallback renders real-shaped cards with explicit non-growth disclosure",
+  );
+
   // Test-only account fixture: private preferences must hydrate in the browser,
   // while the same public document preserves query/deep-link state.
   await page.unroute("**/api/me");
