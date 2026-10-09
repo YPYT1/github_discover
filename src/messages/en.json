@@ -125,8 +125,9 @@
   "footer": "Built for the open-source curious.",
   "footerNote": "An independent project. Not affiliated with GitHub.",
   "errors": {
+    "resourceLimited": "The server reached its compute limit. Please try again later.",
     "demoOnly": "This is a demo. Open the full application to sign in.",
-    "serverError": "Something went wrong. Check the database configuration and try again.",
+    "serverError": "The server could not process this request. Please try again later.",
     "networkError": "Couldn’t reach GitHub. Check your connection and try again.",
     "rateLimited": "GitHub’s request limit was reached. Please wait before trying again.",
     "githubError": "GitHub could not complete the request. Your token may need additional permissions.",

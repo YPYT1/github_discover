@@ -55,7 +55,7 @@ pnpm demo:build     # 静态产物 demo/dist
 - **正式体验**：https://github-discover.ypyt147.workers.dev
 - **交互演示**：https://github-discover-demo.ypyt147.workers.dev
 
-正式站已部署 Workers + D1，可浏览真实 GitHub 数据、使用 PAT 登录。GitHub OAuth 账号登录仍待配置 OAuth App；未配置服务端采集令牌时，公开请求受较严格的 GitHub API 限额限制。
+正式站已部署 Workers + D1，可浏览真实 GitHub 数据、使用 GitHub OAuth 或 PAT 登录。首页静态提供，账号和推荐在浏览器加载；动态 API 仍受免费 Worker 资源额度限制。未配置服务端采集令牌时，公开请求受较严格的 GitHub API 限额限制。
 
 - [演示部署](demo/README.md)：独立静态 Worker / Pages，无需数据库。
 - [正式应用部署](doc/Cloudflare部署.md)：Workers + D1 + GitHub OAuth。

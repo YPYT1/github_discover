@@ -12,12 +12,19 @@ const identity = await account.json();
 assert.equal(identity.user, null);
 assert.equal(typeof identity.authConfigured, "boolean");
 const home = await fetch(baseURL, { headers: { "accept-language": "en" } });
-assert.equal(
-  home.status,
-  200,
-  "Compiled Worker must server-render the homepage",
-);
+assert.equal(home.status, 200, "Cloudflare must serve the static homepage");
 assert.match(await home.text(), /Discover repositories/);
+assert.equal(home.headers.get("x-discover-delivery"), "static-home");
+const cookieHome = await fetch(
+  `${baseURL}/?q=typescript&language=TypeScript&repo=github/docs`,
+  {
+    headers: {
+      cookie: "discover_session=invalid-test-session; discover_locale=zh-CN",
+    },
+  },
+);
+assert.equal(cookieHome.status, 200);
+assert.equal(cookieHome.headers.get("x-discover-delivery"), "static-home");
 const trend = await fetch(`${baseURL}/api/feed?tab=trending`);
 assert.equal(trend.status, 200, "Compiled Worker must execute D1 queries");
 const data = await trend.json();
@@ -27,7 +34,7 @@ const forbidden = await fetch(`${baseURL}/api/internal/sync`, {
 });
 assert.equal(forbidden.status, 403, "Sync must reject unauthenticated callers");
 console.log(
-  "PASS: compiled Worker HTTP handlers, SSR, D1 and sync authorization",
+  "PASS: static homepage with query/cookies, compiled Worker APIs, D1 and sync authorization",
 );
 const origin = process.env.WORKER_APP_ORIGIN ?? "http://localhost:3000";
 const unseen = await fetch(`${baseURL}/api/me/seen`, {

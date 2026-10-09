@@ -2,7 +2,6 @@
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
 import {
   Sun,
   Moon,
@@ -17,7 +16,6 @@ import {
 } from "lucide-react";
 import { Github } from "@/components/ui/github-icon";
 import Image from "next/image";
-import Link from "next/link";
 import { persistLocale } from "@/lib/preferences";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "@/components/providers";
@@ -43,7 +41,6 @@ export function AppHeader({
   const t = useTranslations();
   const locale = useLocale();
   const { resolvedTheme, setTheme } = useTheme();
-  const router = useRouter();
   const { user, loading, setLoginOpen, reload, report } = useAccount();
   async function preference(value: { locale?: Locale; theme?: Theme }) {
     if (value.theme) setTheme(value.theme);
@@ -57,7 +54,6 @@ export function AppHeader({
       if (value.theme) setTheme(value.theme);
       if (value.locale) {
         persistLocale(value.locale);
-        router.refresh();
       }
     } catch (error) {
       report(error);
@@ -84,7 +80,8 @@ export function AppHeader({
       </a>
       <header className="sticky top-0 z-30 h-16 border-b border-border bg-header">
         <div className="page-container flex h-full items-center justify-between gap-3">
-          <Link
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Navigate to the static document without a Next.js RSC prefetch. */}
+          <a
             href="/"
             className="flex min-w-0 items-center gap-3"
             aria-label="GitHub Discover"
@@ -96,7 +93,7 @@ export function AppHeader({
             <span className="hidden text-lg font-light text-muted sm:inline">
               / GitHub
             </span>
-          </Link>
+          </a>
           <div className="flex items-center gap-1.5 sm:gap-2">
             <Button
               variant="ghost"

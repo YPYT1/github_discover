@@ -125,8 +125,9 @@
   "footer": "为每一位开源探索者而建。",
   "footerNote": "独立项目，与 GitHub 无隶属关系。",
   "errors": {
+    "resourceLimited": "服务器计算资源达到限制，请稍后重试。",
     "demoOnly": "这是交互演示，请前往正式应用登录。",
-    "serverError": "请求失败，请检查数据库配置后重试。",
+    "serverError": "服务器暂时无法处理请求，请稍后重试。",
     "networkError": "无法连接 GitHub，请检查网络后重试。",
     "rateLimited": "已达到 GitHub 请求限制，请稍后重试。",
     "githubError": "GitHub 无法完成请求，令牌可能需要额外权限。",

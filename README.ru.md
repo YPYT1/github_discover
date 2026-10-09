@@ -45,7 +45,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 - **Приложение**: https://github-discover.ypyt147.workers.dev
 - **Демо**: https://github-discover-demo.ypyt147.workers.dev
 
-Приложение использует Workers + D1 и реальные данные GitHub. Доступен вход по PAT; OAuth App ещё не настроено. Без серверного токена действуют строгие лимиты API.
+Приложение использует Workers + D1 и реальные данные GitHub, с входом OAuth/PAT. Главная страница статическая; аккаунт и лента загружаются в браузере. Динамические API ограничены ресурсами бесплатного Worker и квотами GitHub.
 
 [Демо](demo/README.md) · [Основное приложение](doc/Cloudflare部署.md) · [Технические заметки](doc/技术说明.md) (китайский)
 

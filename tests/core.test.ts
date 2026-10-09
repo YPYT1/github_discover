@@ -7,6 +7,19 @@ import { checkOrigin } from "@/lib/http";
 import { normalizeRepository } from "@/lib/github";
 import { matches } from "@/lib/feed";
 import type { Repository } from "@/types";
+import { matchLocale } from "@/lib/locale";
+describe("browser language matching", () => {
+  it.each([
+    ["zh-TW,en-US", "zh-CN"],
+    ["en-US", "en"],
+    ["ja-JP,en", "ja"],
+    ["ko-KR", "ko"],
+    ["ru-RU", "ru"],
+    ["fr-FR", "en"],
+  ])("matches %s to %s", (input, locale) => {
+    expect(matchLocale(input)).toBe(locale);
+  });
+});
 describe("responsive masonry", () => {
   it.each([
     [375, 351, 1],

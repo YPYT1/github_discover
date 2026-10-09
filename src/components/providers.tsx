@@ -8,7 +8,6 @@ import {
 } from "react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import type { User } from "@/types";
 import { api, errorCode, TOKEN_STORAGE_KEY } from "@/lib/client";
 import { persistLocale } from "@/lib/preferences";
@@ -36,7 +35,6 @@ function AccountProvider({ children }: { children: React.ReactNode }) {
   const [message, setMessage] = useState("");
   const t = useTranslations();
   const locale = useLocale();
-  const router = useRouter();
   const { setTheme } = useTheme();
   const report = useCallback(
     (error: unknown) => {
@@ -57,11 +55,10 @@ function AccountProvider({ children }: { children: React.ReactNode }) {
         setTheme(data.user.theme);
         if (data.user.locale !== locale) {
           persistLocale(data.user.locale);
-          router.refresh();
         }
       }
     },
-    [locale, router, setTheme],
+    [locale, setTheme],
   );
   const reload = useCallback(async () => {
     try {

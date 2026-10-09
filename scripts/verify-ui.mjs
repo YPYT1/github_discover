@@ -306,6 +306,56 @@ try {
   console.log(
     "PASS: timed exposure persists without removing cards; refresh excludes seen, explicit search does not",
   );
+  // Test-only account fixture: private preferences must hydrate in the browser,
+  // while the same public document preserves query/deep-link state.
+  await page.unroute("**/api/me");
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        user: {
+          id: 7,
+          login: "test-account",
+          name: "Test account",
+          avatar: "https://avatars.githubusercontent.com/u/7",
+          locale: "ja",
+          theme: "dark",
+          authMethod: "oauth",
+          canStar: false,
+        },
+        authConfigured: true,
+      },
+    }),
+  );
+  await page.route("**/api/me/seen", (route) =>
+    route.fulfill({ json: { ok: true } }),
+  );
+  await page.route("**/api/me/repository?**", (route) =>
+    route.fulfill({
+      json: { saved: false, dismissed: false, starred: false, history: true },
+    }),
+  );
+  const response = await page.goto(
+    `${baseURL}/?q=explicit-search&language=TypeScript&category=tools&sort=stars&repo=github/docs`,
+  );
+  assert.equal(response.status(), 200);
+  await page.waitForFunction(
+    () =>
+      document.documentElement.lang === "ja" &&
+      document.documentElement.classList.contains("dark"),
+  );
+  await page.getByRole("dialog").waitFor();
+  assert.equal(new URL(page.url()).searchParams.get("q"), "explicit-search");
+  assert.equal(new URL(page.url()).searchParams.get("language"), "TypeScript");
+  assert.equal(new URL(page.url()).searchParams.get("repo"), "github/docs");
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page.locator("article").first().waitFor();
+  assert.equal(new URL(page.url()).searchParams.get("q"), "explicit-search");
+  assert.equal(await page.locator("html").getAttribute("lang"), "ja");
+  assert.deepEqual(failures, []);
+  console.log(
+    "PASS: account language/theme hydration, query/deep-link preservation and document reload",
+  );
 } finally {
   await context.close();
   await browser.close();

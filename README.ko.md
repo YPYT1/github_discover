@@ -45,7 +45,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 - **정식 앱**: https://github-discover.ypyt147.workers.dev
 - **데모**: https://github-discover-demo.ypyt147.workers.dev
 
-정식 앱은 Workers + D1 및 실제 GitHub 데이터를 사용합니다. PAT 로그인은 가능하며 OAuth App 설정은 아직 필요합니다. 서버 토큰 미설정 시 API 제한이 적용됩니다.
+정식 앱은 Workers + D1 및 실제 GitHub 데이터를 사용하며 OAuth/PAT 로그인이 가능합니다. 홈페이지는 정적으로 제공되고 계정과 피드는 브라우저에서 불러옵니다. 동적 API에는 무료 Worker 리소스 한도와 GitHub API 제한이 적용됩니다.
 
 [데모](demo/README.md) · [정식 배포](doc/Cloudflare部署.md) · [기술 설명](doc/技术说明.md)（중국어）
 

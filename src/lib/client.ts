@@ -24,7 +24,18 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
       throw error;
     throw new ClientError("networkError");
   }
-  const data: unknown = await response.json();
+  const text = await response.text();
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new ClientError(
+      !response.ok &&
+        /1102|Worker exceeded (?:CPU time|resource) limit/i.test(text)
+        ? "resourceLimited"
+        : "serverError",
+    );
+  }
   if (!response.ok)
     throw new ClientError(
       data &&

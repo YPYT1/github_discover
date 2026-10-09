@@ -1,12 +1,4 @@
-import { Discover } from "@/components/feed/discover";
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const params = await searchParams;
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params))
-    if (typeof value === "string") query.set(key, value);
-  return <Discover initialQuery={query.toString()} />;
+import { Homepage } from "@/components/homepage";
+export default function Page() {
+  return <Homepage />;
 }

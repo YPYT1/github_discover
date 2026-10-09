@@ -1,24 +1,22 @@
 import type { Metadata } from "next";
-import { NextIntlClientProvider } from "next-intl";
-import { getLocale } from "next-intl/server";
+import { ClientIntlProvider } from "@/components/client-intl-provider";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "GitHub Discover",
   description: "Discover real GitHub open-source repositories.",
 };
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const locale = await getLocale();
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <NextIntlClientProvider>
+        <ClientIntlProvider>
           <Providers>{children}</Providers>
-        </NextIntlClientProvider>
+        </ClientIntlProvider>
       </body>
     </html>
   );

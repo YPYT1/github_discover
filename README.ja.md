@@ -45,7 +45,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 - **本番**: https://github-discover.ypyt147.workers.dev
 - **デモ**: https://github-discover-demo.ypyt147.workers.dev
 
-本番は Workers + D1 と実際の GitHub データを使用。PAT ログインは利用可能ですが、OAuth App は未設定です。サーバー側トークン未設定のため API 制限にご注意ください。
+本番は Workers + D1 と実際の GitHub データを使用。OAuth/PAT ログインは利用可能です。ホームは静的配信、アカウントとフィードはブラウザーで読み込みます。動的 API には無料 Worker のリソース制限と GitHub API 制限があります。
 
 [デモ](demo/README.md) · [本番デプロイ](doc/Cloudflare部署.md) · [技術説明](doc/技术说明.md)（中国語）
 

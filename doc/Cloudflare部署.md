@@ -6,7 +6,9 @@
 
 网站部署到 **Workers**，数据库使用 **D1 / SQLite**。正式站已发布到 https://github-discover.ypyt147.workers.dev，演示站为 https://github-discover-demo.ypyt147.workers.dev。
 
-远程迁移已应用，`TOKEN_ENCRYPTION_KEY` 与 `CRON_SECRET` 已通过 Worker Secrets 配置；OAuth App 和服务端 `GITHUB_TOKEN` 尚未配置。不要将本机部署令牌或 GitHub CLI 登录令牌当作应用采集令牌使用。
+远程迁移已应用，OAuth App、`TOKEN_ENCRYPTION_KEY` 与 `CRON_SECRET` 已通过 Worker Secrets 配置；服务端 `GITHUB_TOKEN` 尚未配置。不要将本机部署令牌或 GitHub CLI 登录令牌当作应用采集令牌使用。
+
+首页采用静态资产优先策略：`pnpm cf:build` 在 OpenNext 构建后复制真正的 Next.js 预渲染 HTML 至 `.open-next/assets/index.html`，并自动检查静态化状态。不要绕过该打包步骤只运行 OpenNext build。`assets.run_worker_first` 仅包含 `/api/*`；登录状态、语言和 URL 查询在浏览器初始化，私人账号数据不会写进公共首页。动态 API 仍可能受免费套餐 CPU 限制，不能将静态首页测试当成全站容量保证。
 
 ## 1. 创建数据库
 

@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { createHash } from "node:crypto";
 import {
   addTaste,
   emptyTaste,
@@ -27,6 +28,31 @@ function repo(id: number, language = "Rust", stars = 300): Repository {
   };
 }
 describe("recommendation ranking", () => {
+  it("normalizes rich profiles only once and preserves the legacy ranking exactly", () => {
+    const taste = emptyTaste();
+    for (let i = 0; i < 1500; i++) taste.topics[`topic-${i}`] = 1 + (i % 10);
+    for (let i = 0; i < 30; i++) taste.languages[`lang-${i}`] = 1 + i;
+    const pool = Array.from({ length: 1500 }, (_, i) => ({
+      ...repo(i + 1, `lang-${i % 30}`, 1000),
+      owner: `owner-${i % 100}`,
+      topics: Array.from({ length: 8 }, (_, j) => `topic-${(i + j) % 1500}`),
+    }));
+    const scan = vi.spyOn(Object, "values");
+    let ranked: Repository[];
+    try {
+      ranked = rankRecommendations(pool, taste, new Set(), "fixed", now);
+      expect(scan).toHaveBeenCalledTimes(3);
+    } finally {
+      scan.mockRestore();
+    }
+    expect(ranked).toHaveLength(600);
+    // Golden digest generated from the pre-optimization implementation, with fixed time/seed.
+    expect(
+      createHash("sha256")
+        .update(JSON.stringify(ranked.map((r) => r.id)))
+        .digest("hex"),
+    ).toBe("77e8031db3a9d2bcea0f400a9ac9dd57605d22fb0aeb0193ced548a5afcbc958");
+  });
   it("ranks stack match above unmatched fame", () => {
     const taste = emptyTaste();
     addTaste(taste, repo(1), 6);
