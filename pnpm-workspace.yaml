@@ -1,0 +1,10 @@
+nodeLinker: hoisted
+allowBuilds:
+  "@parcel/watcher": true
+  "@swc/core": true
+  esbuild: true
+  workerd: true
+  sharp: true
+  unrs-resolver: true
+patchedDependencies:
+  "@opennextjs/cloudflare@1.20.9": patches/@opennextjs__cloudflare@1.20.9.patch

@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "github-discover",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-08",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "github-discover" },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "github-discover",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": { "APP_URL": "http://localhost:3000" },
+  "triggers": { "crons": ["17 */6 * * *"] },
+  "observability": { "enabled": true },
+}

@@ -1,0 +1,29 @@
+diff --git a/dist/cli/build/patches/plugins/load-manifest.js b/dist/cli/build/patches/plugins/load-manifest.js
+index b0616a9a1a2729c3bc1cf03dd88edde8afa09d08..c26b8569c263a25425856a2c143f46eb6a7ecdb4 100644
+--- a/dist/cli/build/patches/plugins/load-manifest.js
++++ b/dist/cli/build/patches/plugins/load-manifest.js
+@@ -4,7 +4,7 @@
+  * They rely on `readFileSync` that is not supported by workerd.
+  */
+ import crypto from "node:crypto";
+-import { readFile } from "node:fs/promises";
++import { copyFile, readFile } from "node:fs/promises";
+ import { join, posix, relative, sep } from "node:path";
+ import { Lang, parse } from "@ast-grep/napi";
+ import { getPackagePath } from "@opennextjs/aws/build/helper.js";
+@@ -31,7 +31,14 @@ async function getLoadManifestRule(buildOpts) {
+     const { outputDir } = buildOpts;
+     const baseDir = join(outputDir, "server-functions/default", getPackagePath(buildOpts));
+     const dotNextDir = join(baseDir, ".next");
+-    const manifests = await glob(join(dotNextDir, "**/{*-manifest,required-server-files,prefetch-hints}.json"), {
++    // Next.js 16.4 moved preview props to a separately loaded server manifest.
++    // The adapter's current copy/glob lists omit it. Keep the real build values.
++    try {
++        await copyFile(join(buildOpts.appBuildOutputPath, ".next/server/preview-props.json"), join(dotNextDir, "server/preview-props.json"));
++    } catch (error) {
++        if (error.code !== "ENOENT") throw error;
++    }
++    const manifests = await glob(join(dotNextDir, "**/{*-manifest,required-server-files,prefetch-hints,preview-props}.json"), {
+         windowsPathsNoEscape: true,
+     });
+     const returnManifests = (await Promise.all(manifests.map(async (manifest) => `

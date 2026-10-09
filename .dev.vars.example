@@ -1,0 +1,10 @@
+NEXTJS_ENV=development
+APP_URL=http://localhost:3000
+# Create a GitHub OAuth App. Callback: http://localhost:3000/api/auth/callback
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+# Optional server-only token to increase public GitHub API rate limits.
+GITHUB_TOKEN=
+# Generate independently: pnpm exec node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+TOKEN_ENCRYPTION_KEY=
+CRON_SECRET=
