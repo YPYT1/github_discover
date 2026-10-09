@@ -1,5 +1,6 @@
 {
   "brand": "Discover",
+  "staleCache": "GitHub is temporarily limited or unavailable. Showing cached public data; counts may be out of date. No new Star-growth observation is inferred from old data.",
   "tokenHelp": "Token permissions",
   "filterSearch": "Find an option",
   "remove": "Remove",
@@ -130,7 +131,8 @@
     "demoOnly": "This is a demo. Open the full application to sign in.",
     "serverError": "The server could not process this request. Please try again later.",
     "networkError": "Couldn’t reach GitHub. Check your connection and try again.",
-    "rateLimited": "GitHub’s request limit was reached. Please wait before trying again.",
+    "rateLimited": "Requests are temporarily limited by this service or GitHub. Please wait before trying again.",
+    "filterLimit": "Select no more than 16 language/category combinations, or use All languages / All categories.",
     "githubError": "GitHub could not complete the request. Your token may need additional permissions.",
     "invalidSearch": "GitHub could not understand this search. Check your query syntax.",
     "invalidRequest": "The request is invalid. Please check your input.",

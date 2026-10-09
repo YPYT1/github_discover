@@ -59,6 +59,12 @@ export function parseFilters(params: URLSearchParams) {
   )
     throw new AppError("invalidRequest");
   const license = params.get("license") ?? "";
+  // Reject excessive Cartesian fan-out explicitly; never truncate selected OR filters.
+  if (
+    new Set(language.split(",")).size * new Set(category.split(",")).size >
+    16
+  )
+    throw new AppError("filterLimit");
   if (
     license &&
     !["mit", "apache-2.0", "gpl-3.0", "bsd-3-clause", "unlicense"].includes(

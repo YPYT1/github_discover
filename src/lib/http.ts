@@ -11,7 +11,18 @@ export function errorResponse(error: unknown) {
     error instanceof AppError && error.status < 500 ? "warn" : "error",
   );
   if (error instanceof AppError)
-    return Response.json({ error: error.code }, { status: error.status });
+    return Response.json(
+      { error: error.code },
+      {
+        status: error.status,
+        headers: error.retryAfter
+          ? {
+              "Retry-After": String(error.retryAfter),
+              "Cache-Control": "no-store",
+            }
+          : undefined,
+      },
+    );
   return Response.json(
     { error: "serverError", requestId: requestId() },
     { status: 500 },
@@ -27,8 +38,28 @@ export async function readBody(
 ): Promise<Record<string, unknown>> {
   if (!request.headers.get("content-type")?.includes("application/json"))
     throw new AppError("invalidRequest");
-  const text = await request.text();
-  if (text.length > limit) throw new AppError("invalidRequest");
+  if (Number(request.headers.get("content-length")) > limit)
+    throw new AppError("invalidRequest", 413);
+  const reader = request.body?.getReader();
+  if (!reader) throw new AppError("invalidRequest");
+  const decoder = new TextDecoder();
+  let text = "",
+    bytes = 0;
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > limit) {
+        void reader.cancel().catch(() => {});
+        throw new AppError("invalidRequest", 413);
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
   try {
     const value: unknown = JSON.parse(text);
     if (!value || typeof value !== "object" || Array.isArray(value))

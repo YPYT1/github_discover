@@ -54,6 +54,7 @@ await page.route("**/api/feed?**", (route) => {
       total: 12,
       nextCursor: offset ? null : "test-cursor",
       ...(params.get("tab") === "trending" ? { notice: "trendFallback" } : {}),
+      ...(params.get("q") === "cached-fallback" ? { degraded: true } : {}),
     },
   });
 });
@@ -318,6 +319,14 @@ try {
   );
   console.log(
     "PASS: trending fallback renders real-shaped cards with explicit non-growth disclosure",
+  );
+  await page.goto(`${baseURL}/?tab=trending&period=week&q=cached-fallback`);
+  await page.locator("article").first().waitFor();
+  await page.getByText("GitHub 暂时限流或不可用", { exact: false }).waitFor();
+  await page.getByText("Star 增长历史尚不足", { exact: false }).waitFor();
+  assert.deepEqual(failures, []);
+  console.log(
+    "PASS: stale public cache disclosure preserves separate trend-history notice",
   );
 
   // Test-only account fixture: private preferences must hydrate in the browser,

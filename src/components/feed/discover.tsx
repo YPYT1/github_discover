@@ -53,6 +53,7 @@ export function Discover({ initialQuery }: { initialQuery: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState<FeedResponse["notice"]>();
+  const [degraded, setDegraded] = useState(false);
   const [selected, setSelected] = useState<string | null>(
     new URLSearchParams(initialQuery).get("repo"),
   );
@@ -149,6 +150,7 @@ export function Discover({ initialQuery }: { initialQuery: string }) {
         setCursor(data.nextCursor);
         setTotal(data.total);
         setNotice(data.notice);
+        setDegraded(Boolean(data.degraded));
       } catch (error) {
         if (!controller.signal.aborted) setError(errorCode(error));
       } finally {
@@ -368,6 +370,11 @@ export function Discover({ initialQuery }: { initialQuery: string }) {
             {t("source")}
           </span>
         </div>
+        {degraded && (
+          <p role="status" className="mb-4 text-sm text-muted-foreground">
+            {t("staleCache")}
+          </p>
+        )}
         {notice && (
           <p
             role="status"

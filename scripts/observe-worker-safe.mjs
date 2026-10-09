@@ -1,5 +1,22 @@
 import { spawn } from "node:child_process";
 import { sanitizeLogRecord } from "../src/lib/observability.ts";
+import { createArchive } from "./log-archive.mjs";
+const archive = process.argv.includes("--archive")
+  ? createArchive(
+      process.env.LOG_ARCHIVE_DIR ??
+        "D:/USER_TEMP/opencode/github-discover-logs",
+    )
+  : null;
+function emit(record) {
+  console.log(JSON.stringify(record));
+  if (archive) {
+    try {
+      archive(record);
+    } catch {
+      console.error("Local log archive write failed; live tail continues.");
+    }
+  }
+}
 
 // Request diagnostics only. Never print request headers, cookies, query strings,
 // application log payloads, authorization codes, or credentials.
@@ -50,35 +67,33 @@ child.stdout.on("data", (chunk) => {
     buffer = buffer.slice(end + 1);
     try {
       const event = JSON.parse(text);
-      console.log(
-        JSON.stringify({
-          outcome: event.outcome,
-          path: event.event?.request?.url
-            ? sanitizePath(new URL(event.event.request.url).pathname)
-            : null,
-          method: [
-            "GET",
-            "POST",
-            "PUT",
-            "PATCH",
-            "DELETE",
-            "HEAD",
-            "OPTIONS",
-          ].includes(event.event?.request?.method)
-            ? event.event.request.method
-            : "other",
-          cpuMs: event.cpuTime,
-          wallMs: event.wallTime,
-          exceptionCount: event.exceptions?.length ?? 0,
-        }),
-      );
+      emit({
+        outcome: event.outcome,
+        path: event.event?.request?.url
+          ? sanitizePath(new URL(event.event.request.url).pathname)
+          : null,
+        method: [
+          "GET",
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE",
+          "HEAD",
+          "OPTIONS",
+        ].includes(event.event?.request?.method)
+          ? event.event.request.method
+          : "other",
+        cpuMs: event.cpuTime,
+        wallMs: event.wallTime,
+        exceptionCount: event.exceptions?.length ?? 0,
+      });
       for (const log of event.logs ?? []) {
         for (const message of log.message ?? []) {
           try {
             const safe = sanitizeLogRecord(
               typeof message === "string" ? JSON.parse(message) : message,
             );
-            if (safe) console.log(JSON.stringify(safe));
+            if (safe) emit(safe);
           } catch {
             /* Never forward arbitrary log text. */
           }

@@ -39,6 +39,7 @@ export interface User {
   authMethod: "oauth" | "pat";
 }
 export interface FeedResponse {
+  degraded?: boolean;
   repositories: Repository[];
   nextCursor: string | null;
   total: number;

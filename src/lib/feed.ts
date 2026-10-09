@@ -8,6 +8,7 @@ import { userToken, type UserRow } from "./auth";
 import { hashToken } from "./crypto";
 import { activePopular } from "./trending-fallback";
 import { recordCache } from "./observability";
+import { publicGithub } from "./public-github";
 import {
   isRecommendation,
   recommendationFeed,
@@ -89,18 +90,27 @@ export async function feed(
       .first<{ data: string }>();
     if (cursor && !stored) throw new AppError("invalidCursor");
     let repos: Repository[];
-    if (stored) repos = JSON.parse(stored.data);
-    else {
+    let degraded = false;
+    if (stored) {
+      const saved = JSON.parse(stored.data);
+      repos = Array.isArray(saved) ? saved : saved.repos;
+      degraded = Boolean(saved.degraded);
+    } else {
       const all: Repository[] = [];
       for (const variant of filterVariants(f)) {
         const data = await feed(env, variant, null, user);
+        degraded ||= Boolean(data.degraded);
         all.push(...data.repositories);
       }
       repos = sortRepos([...new Map(all.map((r) => [r.id, r])).values()], f);
       await env.DB.prepare(
         "INSERT OR REPLACE INTO feed_cache(key,data,expires_at) VALUES(?,?,?)",
       )
-        .bind(key, JSON.stringify(repos), Date.now() + 300000)
+        .bind(
+          key,
+          JSON.stringify({ repos, degraded }),
+          Date.now() + (degraded ? 60000 : 300000),
+        )
         .run();
     }
     return {
@@ -111,6 +121,7 @@ export async function feed(
           ? btoa(JSON.stringify({ key, offset: offset + 25 }))
           : null,
       notice: "multiScope",
+      ...(degraded ? { degraded: true } : {}),
     };
   }
   if (["following", "saved", "history", "stars"].includes(f.tab) && !user)
@@ -247,14 +258,27 @@ export async function feed(
     const baseline = new Date(Date.now() - days * 86400000)
       .toISOString()
       .slice(0, 10);
+    const baselineFloor = new Date(Date.now() - (days + 1) * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const freshFloor = new Date(Date.now() - 86400000)
+      .toISOString()
+      .slice(0, 10);
     const rows = await env.DB.prepare(
       `SELECT r.data,
       (SELECT stars FROM star_snapshots WHERE repo_id=r.id ORDER BY day DESC LIMIT 1) -
-      (SELECT stars FROM star_snapshots WHERE repo_id=r.id AND day<=? ORDER BY day DESC LIMIT 1) AS growth
-      FROM repositories r WHERE EXISTS(SELECT 1 FROM star_snapshots WHERE repo_id=r.id AND day<=?)
-      AND EXISTS(SELECT 1 FROM star_snapshots WHERE repo_id=r.id AND day>?)`,
+       (SELECT stars FROM star_snapshots WHERE repo_id=r.id AND day BETWEEN ? AND ? ORDER BY day DESC LIMIT 1) AS growth
+       FROM repositories r WHERE EXISTS(SELECT 1 FROM star_snapshots WHERE repo_id=r.id AND day BETWEEN ? AND ?)
+       AND EXISTS(SELECT 1 FROM star_snapshots WHERE repo_id=r.id AND day>? AND day>=?)`,
     )
-      .bind(baseline, baseline, baseline)
+      .bind(
+        baselineFloor,
+        baseline,
+        baselineFloor,
+        baseline,
+        baseline,
+        freshFloor,
+      )
       .all<{ data: string; growth: number }>();
     let repos = sortRepos(
       rows.results
@@ -266,9 +290,12 @@ export async function feed(
       { ...f, sort: "growth" },
     );
     const fallback = repos.length === 0 && f.tab === "trending";
-    if (fallback)
+    let degraded = false;
+    if (fallback) {
+      const popular = await activePopular(env, f);
+      degraded = popular.degraded;
       repos = sortRepos(
-        (await activePopular(env, f)).filter((repo) => matches(repo, f)),
+        popular.repos.filter((repo) => matches(repo, f)),
         {
           ...f,
           tab: "for-you",
@@ -276,11 +303,13 @@ export async function feed(
             f.sort === "recommended" || f.sort === "growth" ? "stars" : f.sort,
         },
       );
+    }
     const start = (page - 1) * PAGE_SIZE;
     result = {
       repositories: repos.slice(start, start + PAGE_SIZE),
       total: repos.length,
       nextCursor: next(start + PAGE_SIZE < repos.length),
+      ...(degraded ? { degraded: true } : {}),
       ...(fallback
         ? { notice: "trendFallback" as const }
         : rows.results.length === 0
@@ -297,14 +326,30 @@ export async function feed(
       .bind(collectionKey, Date.now())
       .first<{ data: string }>();
     let repos: Repository[];
-    if (stored) repos = JSON.parse(stored.data);
-    else {
+    let degraded = false;
+    if (stored) {
+      const saved = JSON.parse(stored.data);
+      repos = Array.isArray(saved) ? saved : saved.repos;
+      degraded = Boolean(saved.degraded);
+    } else {
       const candidates: Repository[] = [];
       for (let i = 1; i <= 3; i++) {
-        const batch = await github<{ items: GitHubRepository[] }>(
+        const {
+          data: batch,
+          stale,
+          fetchedAt,
+        } = await publicGithub<{ items: GitHubRepository[] }>(
+          env,
           `/search/repositories?${new URLSearchParams({ q: searchQuery(f), sort: "updated", order: "desc", per_page: "100", page: String(i) })}`,
-          env.GITHUB_TOKEN,
         );
+        degraded ||= stale;
+        if (!stale)
+          await cacheRepositories(
+            env.DB,
+            batch.items.filter((r) => !r.private).map(normalizeRepository),
+            true,
+            fetchedAt,
+          );
         candidates.push(
           ...batch.items
             .filter((repo) => !repo.private)
@@ -316,11 +361,14 @@ export async function feed(
         [...new Map(candidates.map((repo) => [repo.id, repo])).values()],
         { ...f, sort: "created" },
       );
-      await cacheRepositories(env.DB, repos, true);
       await env.DB.prepare(
         "INSERT OR REPLACE INTO feed_cache(key,data,expires_at) VALUES(?,?,?)",
       )
-        .bind(collectionKey, JSON.stringify(repos), Date.now() + 300000)
+        .bind(
+          collectionKey,
+          JSON.stringify({ repos, degraded }),
+          Date.now() + (degraded ? 60000 : 300000),
+        )
         .run();
     }
     const start = (page - 1) * PAGE_SIZE;
@@ -329,20 +377,21 @@ export async function feed(
       total: repos.length,
       nextCursor: next(start + PAGE_SIZE < repos.length),
       notice: "latestScope",
+      ...(degraded ? { degraded: true } : {}),
     };
   } else {
     const query = searchQuery(f);
     const sort = f.sort === "updated" ? "updated" : "stars";
-    const data = await github<{
+    const { data, stale, fetchedAt } = await publicGithub<{
       items: GitHubRepository[];
       total_count: number;
       incomplete_results: boolean;
     }>(
+      env,
       `/search/repositories?${new URLSearchParams({ q: query, sort, order: "desc", per_page: String(PAGE_SIZE), page: String(page) })}`,
-      env.GITHUB_TOKEN,
     );
     let repos = data.items.map(normalizeRepository);
-    await cacheRepositories(env.DB, repos, true);
+    if (!stale) await cacheRepositories(env.DB, repos, true, fetchedAt);
     if (user) {
       const dismissed = await env.DB.prepare(
         "SELECT repo_id FROM dismissed_repositories WHERE user_id=?",
@@ -356,6 +405,7 @@ export async function feed(
     result = {
       repositories: repos,
       total: data.total_count,
+      ...(stale ? { degraded: true } : {}),
       nextCursor: next(
         page * PAGE_SIZE < maximum && data.items.length === PAGE_SIZE,
       ),
@@ -364,7 +414,7 @@ export async function feed(
         : {}),
     };
   }
-  if (!["saved", "history"].includes(f.tab))
+  if (!result.degraded && !["saved", "history"].includes(f.tab))
     await env.DB.prepare(
       "INSERT OR REPLACE INTO feed_cache(key,data,expires_at) VALUES(?,?,?)",
     )

@@ -25,6 +25,9 @@
     "deploy": "pnpm cf:build && opennextjs-cloudflare deploy",
     "release": "node --env-file-if-exists=.env scripts/release.mjs",
     "logs": "node --env-file-if-exists=.env scripts/observe-worker-safe.mjs",
+    "logs:archive": "node --env-file-if-exists=.env scripts/observe-worker-safe.mjs --archive",
+    "test:load:local": "node scripts/verify-load-local.mjs",
+    "ops:status": "node --env-file-if-exists=.env --use-env-proxy scripts/operations-status.mjs",
     "db:migrate:local": "wrangler d1 migrations apply github-discover --local",
     "db:migrate:remote": "wrangler d1 migrations apply github-discover --remote",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"

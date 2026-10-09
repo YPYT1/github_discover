@@ -1,9 +1,14 @@
 import handler from "./.open-next/worker.js";
 import { observeRequest, observeScheduled } from "./src/lib/observability.ts";
+import { protectRequest } from "./src/lib/request-protection.ts";
 
 const worker = {
   fetch(request, env, ctx) {
-    return observeRequest(request, env, () => handler.fetch(request, env, ctx));
+    return observeRequest(
+      request,
+      env,
+      () => protectRequest(request) ?? handler.fetch(request, env, ctx),
+    );
   },
   scheduled(_event, env, ctx) {
     // Service binding avoids exposing an admin endpoint without authentication.

@@ -59,6 +59,8 @@ pnpm demo:build     # 静态产物 demo/dist
 
 运维日志：运行 `pnpm logs`，或查看 Cloudflare → Workers & Pages → github-discover → Observability。详见[日志与故障排查](doc/日志与故障排查.md)。
 
+采集/告警状态：`pnpm ops:status`；本地脱敏归档：`pnpm logs:archive`。免费边界、缓存降级与验收限制见[稳定运营与验收](doc/稳定运营与验收.md)。
+
 - [演示部署](demo/README.md)：独立静态 Worker / Pages，无需数据库。
 - [正式应用部署](doc/Cloudflare部署.md)：Workers + D1 + GitHub OAuth。
 - [技术与数据说明](doc/技术说明.md)：推荐、隐私、数据范围与验证。

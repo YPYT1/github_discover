@@ -11,17 +11,18 @@ export async function cacheRepositories(
   db: D1Database,
   repos: Repository[],
   snapshot = false,
+  observedAt = Date.now(),
 ) {
   return observeOperation(
     "repository_cache",
     async () => {
       if (!repos.length) return;
-      const now = Date.now();
+      const now = observedAt;
       const statements = repos.map((repo) =>
         db
           .prepare(
             `INSERT INTO repositories(id,full_name,data,fetched_at) VALUES(?,?,?,?)
-    ON CONFLICT(id) DO UPDATE SET full_name=excluded.full_name,data=excluded.data,fetched_at=excluded.fetched_at`,
+    ON CONFLICT(id) DO UPDATE SET full_name=excluded.full_name,data=excluded.data,fetched_at=excluded.fetched_at WHERE excluded.fetched_at>=repositories.fetched_at`,
           )
           .bind(repo.id, repo.fullName, JSON.stringify(repo), now),
       );
@@ -31,12 +32,14 @@ export async function cacheRepositories(
             db
               .prepare(
                 `INSERT INTO star_snapshots(repo_id,day,stars) VALUES(?,?,?)
-    ON CONFLICT(repo_id,day) DO UPDATE SET stars=excluded.stars`,
+    ON CONFLICT(repo_id,day) DO UPDATE SET stars=excluded.stars WHERE ?>=(SELECT fetched_at FROM repositories WHERE id=?)`,
               )
               .bind(
                 repo.id,
                 new Date(now).toISOString().slice(0, 10),
                 repo.stars,
+                now,
+                repo.id,
               ),
           ),
         );

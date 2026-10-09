@@ -6,6 +6,7 @@ import { cacheRepositories } from "./repositories";
 import { hashToken } from "./crypto";
 import { AppError } from "./http";
 import { observeOperation, recordCache } from "./observability";
+import { publicGithub } from "./public-github";
 import {
   addTaste,
   emptyTaste,
@@ -145,6 +146,7 @@ async function candidates(
   ).all<{ data: string }>();
   const repos = rows.results.map((r) => JSON.parse(r.data) as Repository);
   let successful = false;
+  let degraded = false;
   let failure: unknown;
   // Sequential calls bound GitHub search pressure; each lane's cache is shared, not per user.
   for (let i = 0; i < lanes.length; i++) {
@@ -164,34 +166,38 @@ async function candidates(
     }
     recordCache("candidates", false);
     try {
-      let data = await github<{ items: GitHubRepository[] }>(
+      let fetched = await publicGithub<{ items: GitHubRepository[] }>(
+        env,
         `/search/repositories?${new URLSearchParams({ q: query, sort: i === 1 ? "stars" : "updated", order: "desc", per_page: "100", page: String(page) })}`,
-        env.GITHUB_TOKEN,
       );
-      if (!data.items.length && page > 1)
-        data = await github<{ items: GitHubRepository[] }>(
+      if (!fetched.data.items.length && page > 1)
+        fetched = await publicGithub<{ items: GitHubRepository[] }>(
+          env,
           `/search/repositories?${new URLSearchParams({ q: query, sort: i === 1 ? "stars" : "updated", order: "desc", per_page: "100", page: "1" })}`,
-          env.GITHUB_TOKEN,
         );
-      const batch = data.items
+      degraded ||= fetched.stale;
+      const batch = fetched.data.items
         .filter((r) => !r.private)
         .map(normalizeRepository);
       repos.push(...batch);
       successful = true;
-      await cacheRepositories(env.DB, batch, true);
-      await env.DB.prepare(
-        "INSERT OR REPLACE INTO feed_cache(key,data,expires_at) VALUES(?,?,?)",
-      )
-        .bind(key, JSON.stringify(batch), Date.now() + 900000)
-        .run();
+      if (!fetched.stale)
+        await cacheRepositories(env.DB, batch, true, fetched.fetchedAt);
+      if (!fetched.stale)
+        await env.DB.prepare(
+          "INSERT OR REPLACE INTO feed_cache(key,data,expires_at) VALUES(?,?,?)",
+        )
+          .bind(key, JSON.stringify(batch), Date.now() + 900000)
+          .run();
     } catch (error) {
+      degraded = true;
       failure = error;
       if (error instanceof AppError && error.code === "rateLimited") break;
     }
   }
   if (!successful && !repos.length)
     throw failure ?? new AppError("networkError", 503);
-  return repos;
+  return { repos, degraded };
 }
 export async function recommendationFeed(
   env: CloudflareEnv,
@@ -208,6 +214,7 @@ export async function recommendationFeed(
   let id: string,
     offset = 0,
     ordered: Repository[];
+  let degraded = false;
   if (cursor) {
     try {
       const value = JSON.parse(atob(cursor));
@@ -230,7 +237,9 @@ export async function recommendationFeed(
         .first<{ data: string }>();
       if (!stored) throw new Error();
       recordCache("recommendation", true);
-      ordered = JSON.parse(stored.data);
+      const saved = JSON.parse(stored.data);
+      ordered = Array.isArray(saved) ? saved : saved.repos;
+      degraded = Boolean(saved.degraded);
       if (offset > ordered.length) throw new Error();
     } catch {
       throw new AppError("invalidCursor");
@@ -239,9 +248,9 @@ export async function recommendationFeed(
     recordCache("recommendation", false);
     id = crypto.randomUUID();
     const taste = await tasteFor(env, user, excluded);
-    const pool = (
-      await candidates(env, f, taste, id.replaceAll("-", ""))
-    ).filter((r) => matches(r, f));
+    const collected = await candidates(env, f, taste, id.replaceAll("-", ""));
+    degraded = collected.degraded;
+    const pool = collected.repos.filter((r) => matches(r, f));
     ordered = await observeOperation(
       "ranking",
       () => rankRecommendations(pool, taste, excluded, id).slice(0, 600),
@@ -252,7 +261,7 @@ export async function recommendationFeed(
     )
       .bind(
         `recommendation:${user?.id ?? "public"}:${id}:${fingerprint}`,
-        JSON.stringify(ordered),
+        JSON.stringify({ repos: ordered, degraded }),
         Date.now() + 3600000,
       )
       .run();
@@ -266,6 +275,7 @@ export async function recommendationFeed(
   return {
     repositories,
     total: ordered.filter((r) => !excluded.has(r.id)).length,
+    ...(degraded ? { degraded: true } : {}),
     nextCursor: more
       ? btoa(JSON.stringify({ id, key: fingerprint, offset }))
       : null,

@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     await env.DB.prepare(
       "DELETE FROM feed_cache WHERE key LIKE ? OR key LIKE ?",
     )
-      .bind(`feed:${user.id}:%`, `collection:${user.id}:%`)
+      .bind(`feed:v2:${user.id}:%`, `collection:${user.id}:%`)
       .run();
     return Response.json({ ok: true });
   } catch (error) {

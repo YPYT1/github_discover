@@ -1,5 +1,6 @@
 {
   "brand": "Discover",
+  "staleCache": "GitHub가 일시적으로 제한되거나 사용할 수 없습니다. 공개 캐시를 표시하며 수치가 최신이 아닐 수 있습니다. 이전 데이터를 새로운 스타 증가 관측으로 기록하지 않습니다.",
   "tokenHelp": "토큰 권한",
   "filterSearch": "옵션 찾기",
   "remove": "제거",
@@ -126,11 +127,12 @@
   "footer": "오픈소스 탐험가를 위해.",
   "footerNote": "GitHub와 제휴하지 않은 독립 프로젝트입니다.",
   "errors": {
+    "filterLimit": "언어와 카테고리 조합은 최대 16개입니다. 선택을 줄이거나 전체 언어/카테고리를 사용하세요.",
     "resourceLimited": "서버 계산 리소스 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
     "demoOnly": "데모입니다. 로그인하려면 실제 앱을 이용하세요.",
     "serverError": "오류가 발생했습니다. 데이터베이스 설정을 확인하세요.",
     "networkError": "GitHub에 연결할 수 없습니다. 다시 시도하세요.",
-    "rateLimited": "GitHub 요청 한도에 도달했습니다. 잠시 기다려 주세요.",
+    "rateLimited": "이 서비스 또는 GitHub가 요청을 일시적으로 제한하고 있습니다. 잠시 기다려 주세요.",
     "githubError": "GitHub 요청에 실패했습니다. 토큰 권한을 확인하세요.",
     "invalidSearch": "검색 구문을 확인하세요.",
     "invalidRequest": "입력값을 확인하세요.",

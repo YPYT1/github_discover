@@ -7,6 +7,11 @@ import { feed } from "@/lib/feed";
 import { hashToken } from "@/lib/crypto";
 import type { Repository } from "@/types";
 import type { UserRow } from "@/lib/auth";
+import { userToken, currentUser } from "@/lib/auth";
+import { encryptToken } from "@/lib/crypto";
+import { publicGithub } from "@/lib/public-github";
+import { acquireLease, releaseLease } from "@/lib/operations";
+import { syncRepositories, operationReport } from "@/lib/sync";
 
 const context = vi.hoisted(() => ({
   env: null as CloudflareEnv | null,
@@ -70,7 +75,8 @@ beforeAll(async () => {
   db = (await mf.getD1Database("DB")) as unknown as D1Database;
   for (const statement of (
     readFileSync("migrations/0001_initial.sql", "utf8") +
-    readFileSync("migrations/0002_recommendations.sql", "utf8")
+    readFileSync("migrations/0002_recommendations.sql", "utf8") +
+    readFileSync("migrations/0003_operations.sql", "utf8")
   )
     .split(";")
     .filter((sql) => sql.trim()))
@@ -89,6 +95,9 @@ beforeEach(async () => {
   context.jar.clear();
   context.requestHeaders = new Headers();
   await db.batch([
+    db.prepare("DELETE FROM operation_leases"),
+    db.prepare("DELETE FROM operation_status"),
+    db.prepare("DELETE FROM operation_alerts"),
     db.prepare("DELETE FROM users"),
     db.prepare("DELETE FROM repositories"),
     db.prepare("DELETE FROM feed_cache"),
@@ -106,6 +115,321 @@ beforeEach(async () => {
       throw new Error("Unexpected network request in database test");
     }),
   );
+});
+it("public requests coalesce and never include browser credentials", async () => {
+  const network = vi.fn(async () => {
+    await new Promise((r) => setTimeout(r, 10));
+    return Response.json({ items: [] });
+  });
+  vi.stubGlobal("fetch", network);
+  const path = "/search/repositories?q=test";
+  const results = await Promise.all(
+    Array.from({ length: 5 }, () => publicGithub(context.env!, path)),
+  );
+  expect(network).toHaveBeenCalledTimes(1);
+  expect(results.every((r) => !r.stale)).toBe(true);
+  await publicGithub(context.env!, path);
+  expect(network).toHaveBeenCalledTimes(1);
+  await expect(publicGithub(context.env!, "/user")).rejects.toThrow(
+    "invalidRequest",
+  );
+});
+it("lease ownership prevents stampedes across isolates and old owners cannot release replacements", async () => {
+  const key = "lease-test";
+  const first = await acquireLease(db, key, 10000);
+  expect(first).toBeTruthy();
+  expect(await acquireLease(db, key)).toBeNull();
+  await releaseLease(db, key, "not-owner");
+  expect(await acquireLease(db, key)).toBeNull();
+  await db
+    .prepare("UPDATE operation_leases SET expires_at=0 WHERE key=?")
+    .bind(key)
+    .run();
+  const replacement = await acquireLease(db, key);
+  expect(replacement).not.toBe(first);
+  await releaseLease(db, key, first!);
+  expect(await acquireLease(db, key)).toBeNull();
+  await releaseLease(db, key, replacement!);
+  expect(await acquireLease(db, key)).toBeTruthy();
+});
+it("stale public fallback is bounded, disclosed and never inserts today's snapshot", async () => {
+  const path = "/search/repositories?q=stale";
+  const raw = {
+    id: repo.id,
+    name: repo.name,
+    full_name: repo.fullName,
+    owner: { login: repo.owner, avatar_url: repo.avatar },
+    stargazers_count: repo.stars,
+    forks_count: repo.forks,
+    language: repo.language,
+    topics: repo.topics,
+    license: { spdx_id: "MIT" },
+    created_at: repo.createdAt,
+    updated_at: repo.updatedAt,
+    html_url: repo.url,
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [raw] })),
+  );
+  await publicGithub(context.env!, path);
+  const key = `public-github:v1:${await hashToken(path)}`;
+  await db
+    .prepare("UPDATE feed_cache SET expires_at=0,data=? WHERE key=?")
+    .bind(
+      JSON.stringify({
+        data: { items: [raw] },
+        fetchedAt: Date.now() - 3600000,
+      }),
+      key,
+    )
+    .run();
+  const network = vi.fn(
+    async () =>
+      new Response("{}", { status: 429, headers: { "retry-after": "120" } }),
+  );
+  vi.stubGlobal("fetch", network);
+  const result = await publicGithub<{ items: unknown[] }>(context.env!, path);
+  expect(result.stale).toBe(true);
+  expect(result.data.items).toHaveLength(1);
+  expect(
+    (await db.prepare("SELECT * FROM star_snapshots").all()).results,
+  ).toHaveLength(0);
+  await publicGithub(context.env!, path);
+  expect(network).toHaveBeenCalledTimes(1);
+  await db
+    .prepare("UPDATE feed_cache SET data=? WHERE key=?")
+    .bind(
+      JSON.stringify({
+        data: { items: [raw] },
+        fetchedAt: Date.now() - 2 * 86400000,
+      }),
+      key,
+    )
+    .run();
+  await expect(publicGithub(context.env!, path)).rejects.toThrow("rateLimited");
+});
+it("shared public cache drops private repositories even with an overprivileged collector", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [{ private: true, id: 1 }] })),
+  );
+  expect(
+    (
+      await publicGithub<{ items: unknown[] }>(
+        context.env!,
+        "/search/repositories?q=private",
+      )
+    ).data.items,
+  ).toEqual([]);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ private: true, id: 1 })),
+  );
+  await expect(
+    publicGithub(context.env!, "/repos/owner/private"),
+  ).rejects.toThrow();
+});
+it("snapshots use actual observation dates and older data cannot overwrite newer values", async () => {
+  const yesterday = Date.now() - 86400000;
+  await cacheRepositories(db, [{ ...repo, stars: 80 }], true, yesterday);
+  await cacheRepositories(db, [repo], true);
+  await cacheRepositories(
+    db,
+    [{ ...repo, stars: 20 }],
+    true,
+    Date.now() - 1000,
+  );
+  const row = await db
+    .prepare("SELECT stars FROM star_snapshots WHERE repo_id=? AND day=?")
+    .bind(repo.id, new Date().toISOString().slice(0, 10))
+    .first<{ stars: number }>();
+  expect(row?.stars).toBe(100);
+});
+it("sync records partial failure, does not retry quota and reports missing collector token", async () => {
+  const network = vi.fn(async () => new Response("{}", { status: 429 }));
+  vi.stubGlobal("fetch", network);
+  await expect(syncRepositories(context.env!)).rejects.toThrow("rateLimited");
+  expect(network).toHaveBeenCalledTimes(1);
+  const report = await operationReport(context.env!);
+  expect(report.tokenConfigured).toBe(false);
+  expect(report.externalAlertsEnabled).toBe(false);
+  expect(report.sync.outcome).toBe("failed");
+  expect(report.alerts.some((r) => r.code === "syncFailed")).toBe(true);
+  expect(
+    (await db.prepare("SELECT * FROM operation_leases").all()).results,
+  ).toHaveLength(0);
+});
+it("never uses an unrelated old baseline as day growth", async () => {
+  await cacheRepositories(db, [repo], true);
+  await db
+    .prepare("INSERT INTO star_snapshots(repo_id,day,stars) VALUES(?,?,?)")
+    .bind(
+      repo.id,
+      new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10),
+      1,
+    )
+    .run();
+  const result = await feed(
+    context.env!,
+    parseFilters(new URLSearchParams({ sort: "growth", period: "day" })),
+    null,
+    null,
+  );
+  expect(result.repositories).toEqual([]);
+  expect(result.notice).toBe("trendPending");
+});
+it("discloses feed fallback on quota exhaustion without inventing new snapshots", async () => {
+  const raw = {
+    id: repo.id,
+    full_name: repo.fullName,
+    name: repo.name,
+    owner: { login: repo.owner, avatar_url: repo.avatar },
+    stargazers_count: 100,
+    forks_count: 4,
+    language: repo.language,
+    topics: repo.topics,
+    license: { spdx_id: "MIT" },
+    created_at: repo.createdAt,
+    updated_at: repo.updatedAt,
+    html_url: repo.url,
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [raw] })),
+  );
+  const f = parseFilters(
+    new URLSearchParams({ tab: "trending", period: "day" }),
+  );
+  await feed(context.env!, f, null, null);
+  await db
+    .prepare("DELETE FROM feed_cache WHERE key NOT LIKE 'public-github:%'")
+    .run();
+  await db.prepare("UPDATE feed_cache SET expires_at=0").run();
+  await db.prepare("DELETE FROM star_snapshots").run();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("{}", { status: 429 })),
+  );
+  const result = await feed(context.env!, f, null, null);
+  expect(result.degraded).toBe(true);
+  expect(result.notice).toBe("trendFallback");
+  expect(result.repositories).toHaveLength(1);
+  expect(result.repositories[0].growth).toBeUndefined();
+  expect(
+    (await db.prepare("SELECT * FROM star_snapshots").all()).results,
+  ).toHaveLength(0);
+});
+it("sync retries transient upstream once, skips concurrent runs and completes real snapshots", async () => {
+  const lease = await acquireLease(db, "sync");
+  expect(await syncRepositories(context.env!)).toEqual({
+    ok: true,
+    skipped: true,
+  });
+  await releaseLease(db, "sync", lease!);
+  let calls = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      ++calls === 1
+        ? new Response("{}", { status: 502 })
+        : Response.json({ items: [] }),
+    ),
+  );
+  const result = await syncRepositories(context.env!);
+  expect(result.ok).toBe(true);
+  expect(calls).toBe(5);
+  expect((await operationReport(context.env!)).sync.searches).toBe(4);
+});
+it("expired session, missing or wrong-account PAT cannot authorize upstream writes", async () => {
+  await tokenLogin(req("/api/auth/token", { token: pat }));
+  const user = { ...(await currentUser(context.env!))! };
+  await expect(userToken(user, context.env!)).rejects.toThrow(
+    "localTokenRequired",
+  );
+  context.requestHeaders = new Headers({ "x-github-token": pat });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ id: 999 })),
+  );
+  await expect(userToken(user, context.env!)).rejects.toThrow("reauthorize");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("{}", { status: 401 })),
+  );
+  await expect(userToken(user, context.env!)).rejects.toThrow("reauthorize");
+  await db.prepare("UPDATE sessions SET expires_at=0").run();
+  expect(await currentUser(context.env!)).toBeNull();
+});
+it("revoked OAuth and fine-grained PAT permissions fail Star writes without destroying saved data", async () => {
+  await tokenLogin(req("/api/auth/token", { token: pat }));
+  await cacheRepositories(db, [repo]);
+  await writeRepo(
+    req("/api/me/repository", {
+      name: repo.fullName,
+      action: "save",
+      enabled: true,
+    }),
+  );
+  context.env!.TOKEN_ENCRYPTION_KEY = btoa("x".repeat(32));
+  await db
+    .prepare(
+      "UPDATE users SET token_encrypted=?,scopes='public_repo' WHERE id=7",
+    )
+    .bind(
+      await encryptToken(
+        "test-revoked-oauth",
+        context.env!.TOKEN_ENCRYPTION_KEY,
+      ),
+    )
+    .run();
+  await db.prepare("UPDATE sessions SET auth_method='oauth'").run();
+  const network = vi.fn(async () => new Response("{}", { status: 401 }));
+  vi.stubGlobal("fetch", network);
+  const revoked = await writeRepo(
+    req("/api/me/repository", {
+      name: repo.fullName,
+      action: "star",
+      enabled: true,
+    }),
+  );
+  expect(revoked.status).toBe(401);
+  expect(await revoked.json()).toEqual({ error: "reauthorize" });
+  await db.prepare("UPDATE users SET scopes='' WHERE id=7").run();
+  expect(
+    (
+      await writeRepo(
+        req("/api/me/repository", {
+          name: repo.fullName,
+          action: "star",
+          enabled: true,
+        }),
+      )
+    ).status,
+  ).toBe(403);
+  expect(network).toHaveBeenCalledTimes(1);
+  await db.prepare("UPDATE sessions SET auth_method='pat'").run();
+  context.requestHeaders = new Headers({ "x-github-token": pat });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) =>
+      url.endsWith("/user")
+        ? Response.json({ id: 7 })
+        : new Response("{}", { status: 403 }),
+    ),
+  );
+  const denied = await writeRepo(
+    req("/api/me/repository", {
+      name: repo.fullName,
+      action: "star",
+      enabled: true,
+    }),
+  );
+  expect(denied.status).toBe(403);
+  expect(await denied.json()).toEqual({ error: "starPermission" });
+  expect(
+    (await db.prepare("SELECT * FROM saved_repositories").all()).results,
+  ).toHaveLength(1);
 });
 it("OAuth account login redirects to GitHub with callback and a state cookie when configured", async () => {
   const unavailable = await oauthLogin(
@@ -209,6 +533,7 @@ it("exhausts anonymous candidates without recycling and validates request bodies
     repositories: [],
     total: 0,
     nextCursor: null,
+    degraded: true,
   });
   expect(
     (

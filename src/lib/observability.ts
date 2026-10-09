@@ -38,6 +38,7 @@ export function routeName(path: string) {
 }
 const codes = new Set([
   "invalidRequest",
+  "filterLimit",
   "invalidSearch",
   "invalidCursor",
   "forbidden",
@@ -58,6 +59,8 @@ const codes = new Set([
   "d1Busy",
   "timeout",
   "configMissing",
+  "syncIncomplete",
+  "starPermission",
   "scheduledFailed",
 ]);
 export function errorCategory(error: unknown) {

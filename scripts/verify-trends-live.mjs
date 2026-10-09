@@ -6,16 +6,23 @@ async function broadTrend(period) {
   let data;
   // Deployment propagation can briefly serve the previous Worker/cache version.
   // Only retry broad availability checks; never weaken assertions on growth/filter correctness.
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     const response = await fetch(
       `${base}/api/feed?tab=trending&period=${period}`,
       { signal: AbortSignal.timeout(30000) },
     );
+    const text = await response.text();
+    assert.doesNotMatch(
+      text,
+      /1102|Worker exceeded/i,
+      "Stop live checks on resource limit",
+    );
+    assert.ok(response.status < 500, "Stop live checks on server failure");
     if (response.ok) {
-      data = await response.json();
+      data = JSON.parse(text);
       if (data.repositories?.length > 0) return data;
     }
-    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 5000));
+    if (attempt < 1) await new Promise((resolve) => setTimeout(resolve, 5000));
   }
   assert.fail(
     `Trending ${period} has no broad results after bounded deployment retries`,

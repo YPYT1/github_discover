@@ -110,14 +110,38 @@ export async function githubResponse(
     (response.status === 403 &&
       (response.headers.get("x-ratelimit-remaining") === "0" ||
         response.headers.has("retry-after")))
-  )
-    throw new AppError("rateLimited", 429);
+  ) {
+    const error = new AppError("rateLimited", 429);
+    const reset =
+      Number(response.headers.get("x-ratelimit-reset") ?? NaN) * 1000 -
+      Date.now();
+    const retry = Number(response.headers.get("retry-after") ?? NaN);
+    error.retryAfter = Math.min(
+      3600,
+      Math.max(
+        1,
+        Number.isFinite(retry) && retry > 0
+          ? Math.ceil(retry)
+          : Number.isFinite(reset) && reset > 0
+            ? Math.ceil(reset / 1000)
+            : 60,
+      ),
+    );
+    throw error;
+  }
   if (response.status === 401) throw new AppError("reauthorize", 401);
   if (response.status === 404) throw new AppError("notFound", 404);
   if (response.status === 422) throw new AppError("invalidSearch", 400);
+  if (response.status === 403 && pathname.startsWith("/user/starred/"))
+    throw new AppError("starPermission", 403);
   if (!response.ok) throw new AppError("githubError", 502);
   return response;
 }
 export async function github<T>(path: string, token?: string): Promise<T> {
-  return (await githubResponse(path, token)).json() as Promise<T>;
+  const response = await githubResponse(path, token);
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new AppError("networkError", 502);
+  }
 }
